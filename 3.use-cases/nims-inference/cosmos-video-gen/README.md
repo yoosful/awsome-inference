@@ -1,10 +1,8 @@
 # Cosmos NIM Text-to-Video Generation on AWS
 
-This example demonstrates how to deploy and use **NVIDIA Cosmos Predict1 7B Text2World NIM** on AWS to generate videos from text descriptions. It provides a complete, production-ready implementation with infrastructure-as-code (AWS CDK), a REST API server, and example clients.
+This project deploys **NVIDIA Cosmos Predict1 7B Text2World NIM** on AWS to generate videos from text descriptions using AWS CDK.
 
 ## Overview
-
-[NVIDIA Cosmos](https://developer.nvidia.com/cosmos) is a family of world foundation models for generating and understanding physical AI applications. The Cosmos Predict1 7B Text2World model generates realistic video sequences from text prompts.
 
 This example includes:
 
@@ -35,24 +33,13 @@ User/Browser → ALB (HTTPS) → ECS Fargate (FastAPI) → Internal ALB (HTTPS) 
 
 ## Prerequisites
 
-### 1. AWS Requirements
-
 - AWS account with appropriate permissions
 - AWS CLI configured with credentials
 - EC2 G5 instance quota (at least 1x G5.12xlarge)
 - Route53 hosted zone with a domain name
-
-### 2. NVIDIA NGC API Key
-
-1. Create an account at [NVIDIA NGC](https://ngc.nvidia.com/)
-2. Generate an API key from your account settings
-3. The key should start with `nvapi-`
-
-### 3. Development Tools
-
+- NVIDIA NGC account and API key (get from [NGC](https://ngc.nvidia.com/))
 - Node.js 18 or later
 - Yarn package manager
-- TypeScript
 
 ## Installation
 
@@ -121,49 +108,28 @@ This uploads your NGC API key to AWS Secrets Manager.
 yarn cdk deploy --require-approval never
 ```
 
-**Deployment Time**: ~40-50 minutes
+**Deployment Time**: ~40-50 minutes (includes ~25-35 minutes for NIM model download and initialization)
 
-- CloudFormation stack creation: ~10 minutes
-- EC2 instance boot and setup: ~10 minutes
-- **Cosmos NIM model download and initialization: ~25-35 minutes** (downloads ~50GB model)
+Monitor progress in CloudFormation Console or SSH into the instance:
 
-### Monitor Deployment
+```bash
+# SSH and check logs
+aws ssm start-session --target <instance-id>
+sudo tail -f /var/log/user-data.log
+sudo docker logs -f cosmos-predict1-text2world
+```
 
-You can monitor the deployment progress:
-
-1. **CloudFormation Console**: Check stack events
-2. **EC2 Console**: View instance status and system logs
-3. **SSH into instance** (optional):
-   ```bash
-   # Get instance ID from CloudFormation outputs
-   aws ssm start-session --target <instance-id>
-
-   # Check user-data logs
-   sudo tail -f /var/log/user-data.log
-
-   # Check Cosmos NIM container logs
-   sudo docker logs -f cosmos-predict1-text2world
-   ```
-
-### Verify Deployment
-
-After deployment completes, verify all services are healthy:
+Verify deployment:
 
 ```bash
 # Get endpoints from CloudFormation outputs
 export API_ENDPOINT=$(aws cloudformation describe-stacks --stack-name CosmosVideoGenStack --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" --output text)
 export NIM_ENDPOINT=$(aws cloudformation describe-stacks --stack-name CosmosVideoGenStack --query "Stacks[0].Outputs[?OutputKey=='NimEndpoint'].OutputValue" --output text)
 
-# Check Cosmos NIM health
+# Check health
 curl $NIM_ENDPOINT/v1/health/ready
-
-# Check API server health
 curl $API_ENDPOINT/health
 ```
-
-Expected responses:
-- Cosmos NIM: `{"status": "ready"}` or similar
-- API Server: `{"status": "healthy", "cosmos_nim_status": "ready"}`
 
 ## Usage
 
@@ -328,87 +294,58 @@ Health check endpoint.
 - **Active usage**: ~$6-7/hour
 - **Monthly (24/7)**: ~$4,300-5,000/month
 
-**Cost Optimization Tips**:
-
-1. **Stop EC2 when not in use**: Manually stop the instance to avoid compute charges
-2. **Use Spot Instances**: Can save up to 70% on EC2 costs (requires CDK modification)
-3. **Adjust video retention**: Reduce `VIDEO_RETENTION_DAYS` to minimize S3 costs
-4. **Use Reserved Instances**: For long-term deployments (1-3 year commitment)
-
 ## Troubleshooting
 
-### Issue: CloudFormation stack creation fails
+### CloudFormation stack creation fails
 
-**Solution**: Check CloudFormation events for specific error messages. Common issues:
+Check CloudFormation events for error messages. Common issues:
 - Insufficient EC2 quota for G5 instances
 - Route53 hosted zone not found
 - Invalid NGC API key format
 
-### Issue: Cosmos NIM container not starting
+### Cosmos NIM container not starting
 
-**Possible Causes**:
-1. NGC API key not valid or expired
-2. Insufficient disk space (need ~50GB for model)
-3. GPU drivers not installed correctly
-
-**Debug Steps**:
+Debug steps:
 ```bash
 # SSH into EC2 instance
 aws ssm start-session --target <instance-id>
 
-# Check container status
+# Check container status and logs
 sudo docker ps -a
-
-# View container logs
 sudo docker logs cosmos-predict1-text2world
 
-# Check GPU availability
+# Check GPU and disk
 nvidia-smi
-
-# Check disk space
 df -h
 ```
 
-### Issue: Video generation times out
+Common causes: invalid NGC API key, insufficient disk space (~50GB needed), GPU driver issues.
 
-**Possible Causes**:
-1. Cosmos NIM still initializing (can take 25-35 minutes on first start)
-2. Instance under heavy load
-3. Network connectivity issues
+### Video generation times out
 
-**Solutions**:
-- Wait for NIM to fully initialize: `curl http://localhost:8000/v1/health/ready`
-- Check NIM container logs: `sudo docker logs cosmos-predict1-text2world`
-- Increase timeout in client: `--timeout 900`
+Wait for NIM initialization (25-35 minutes on first start):
+```bash
+curl http://localhost:8000/v1/health/ready
+```
 
-### Issue: API returns 502 Bad Gateway
+Check NIM logs: `sudo docker logs cosmos-predict1-text2world`
 
-**Possible Causes**:
-1. Fargate container not healthy
-2. Security group blocking traffic
-3. NIM endpoint not reachable from Fargate
+Increase client timeout: `--timeout 900`
 
-**Debug Steps**:
+### API returns 502 Bad Gateway
+
 ```bash
 # Check Fargate task health
 aws ecs list-tasks --cluster cosmos-video-api-cluster
 aws ecs describe-tasks --cluster cosmos-video-api-cluster --tasks <task-arn>
 
-# Check API container logs
+# Check API logs
 aws logs tail /aws/ecs/cosmos-video-api --follow
-
-# Test NIM endpoint from API server (if possible)
 ```
 
-### Issue: Video URL returns 403 Forbidden
+### Video URL returns 403 Forbidden
 
-**Possible Causes**:
-1. Presigned URL expired (1 hour expiration)
-2. S3 bucket permissions issue
-
-**Solutions**:
-- Regenerate URL by fetching job status again
-- Check S3 bucket policy and IAM role permissions
+Presigned URLs expire after 1 hour. Fetch job status again to get a fresh URL.
 
 ## Advanced Configuration
 
@@ -459,28 +396,6 @@ const service = new FargateService(this, 'ApiService', {
 });
 ```
 
-## Cleanup
-
-To avoid ongoing charges, delete all resources:
-
-```bash
-yarn cdk destroy
-```
-
-This will:
-1. Delete the CloudFormation stack
-2. Terminate the EC2 instance
-3. Delete the S3 bucket and all videos
-4. Remove load balancers and target groups
-5. Delete Route53 records
-6. Remove security groups and VPC
-
-**Note**: The NGC API key secret in Secrets Manager is not automatically deleted. To remove it:
-
-```bash
-aws secretsmanager delete-secret --secret-id NGC_API_KEY --force-delete-without-recovery
-```
-
 ## Performance Considerations
 
 ### Video Generation Time
@@ -506,33 +421,35 @@ To increase throughput:
 - Deploy multiple EC2 instances behind the load balancer
 - Implement request batching in the API server
 
-## Security Best Practices
+## Security
 
-1. **API Key Management**: NGC API key stored in AWS Secrets Manager, never in code
-2. **HTTPS Only**: All traffic encrypted via ALB with ACM certificates
-3. **Private S3**: Bucket not publicly accessible, presigned URLs with 1-hour expiration
-4. **IAM Roles**: Least privilege access for EC2 and Fargate tasks
-5. **Security Groups**: Restrictive ingress rules, only necessary ports open
-6. **Video Retention**: Automatic deletion after 7 days reduces data exposure
+- NGC API key stored in AWS Secrets Manager
+- All traffic encrypted via HTTPS with ACM certificates
+- Private S3 bucket with presigned URLs (1-hour expiration)
+- IAM roles with least privilege access
+- Restrictive security group rules
+- Automatic video deletion after 7 days
+
+## Cleanup
+
+To avoid ongoing charges, delete all resources:
+
+```bash
+yarn cdk destroy
+```
+
+To also delete the NGC API key secret:
+
+```bash
+aws secretsmanager delete-secret --secret-id NGC_API_KEY --force-delete-without-recovery
+```
 
 ## Additional Resources
 
 - [NVIDIA Cosmos Documentation](https://developer.nvidia.com/cosmos)
 - [NVIDIA NIM Documentation](https://docs.nvidia.com/nim/)
 - [AWS CDK Documentation](https://docs.aws.amazon.com/cdk/)
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
 
 ## License
 
 This example is licensed under MIT-0. See the LICENSE file.
-
-## Support
-
-For issues or questions:
-- Check the [Troubleshooting](#troubleshooting) section
-- Review CloudWatch logs for API and NIM containers
-- Consult NVIDIA NGC documentation for model-specific questions
-
-## Acknowledgments
-
-This example is inspired by the AWS HPC blog post ["Running NVIDIA Cosmos world foundation models on AWS"](https://aws.amazon.com/blogs/hpc/) and follows patterns from the NIM Voice Bot example in this repository.

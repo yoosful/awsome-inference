@@ -41,22 +41,18 @@ export class ECSResources extends Construct {
   constructor(scope: Construct, id: string, props: ECSResourcesProps) {
     super(scope, id);
 
-    // Create ECS Cluster
     const cluster = new Cluster(this, 'ApiCluster', {
       vpc: props.vpc,
       clusterName: 'cosmos-video-api-cluster',
     });
 
-    // Create Fargate Task Definition
     const taskDefinition = new FargateTaskDefinition(this, 'ApiTaskDef', {
       memoryLimitMiB: 4096,
       cpu: 2048,
     });
 
-    // Grant S3 permissions to task role
     props.videoBucket.grantReadWrite(taskDefinition.taskRole);
 
-    // Build and add container
     const container = taskDefinition.addContainer('ApiContainer', {
       image: ContainerImage.fromAsset(
         path.join(__dirname, 'resources', 'videoApiServer'),
@@ -76,7 +72,6 @@ export class ECSResources extends Construct {
       containerPort: 8000,
     });
 
-    // Create Security Group for Fargate Service
     const fargateSecurityGroup = new SecurityGroup(
       this,
       'FargateSecurityGroup',
@@ -87,7 +82,6 @@ export class ECSResources extends Construct {
       },
     );
 
-    // Create Security Group for ALB
     const albSecurityGroup = new SecurityGroup(this, 'AlbSecurityGroup', {
       vpc: props.vpc,
       description: 'Security group for API ALB',
@@ -100,13 +94,11 @@ export class ECSResources extends Construct {
       'Allow HTTPS traffic',
     );
 
-    // Allow ALB to communicate with Fargate
     fargateSecurityGroup.connections.allowFrom(
       albSecurityGroup,
       Port.tcp(8000),
     );
 
-    // Create Fargate Service
     const service = new FargateService(this, 'ApiService', {
       cluster,
       taskDefinition,
@@ -115,14 +107,12 @@ export class ECSResources extends Construct {
       assignPublicIp: true,
     });
 
-    // Create Application Load Balancer
     const loadBalancer = new ApplicationLoadBalancer(this, 'ApiLoadBalancer', {
       vpc: props.vpc,
       internetFacing: true,
       securityGroup: albSecurityGroup,
     });
 
-    // Add HTTPS listener
     const listener = loadBalancer.addListener('HttpsListener', {
       port: 443,
       protocol: ApplicationProtocol.HTTPS,
@@ -131,7 +121,6 @@ export class ECSResources extends Construct {
       ],
     });
 
-    // Add target
     listener.addTargets('ApiTarget', {
       port: 8000,
       protocol: ApplicationProtocol.HTTP,
@@ -145,7 +134,6 @@ export class ECSResources extends Construct {
       },
     });
 
-    // Create Route53 A record
     new ARecord(this, 'ApiARecord', {
       zone: props.hostedZone,
       recordName: props.apiHostName,

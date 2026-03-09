@@ -5,112 +5,67 @@ import {
 import {
   ElasticLoadBalancingV2Client,
   RegisterTargetsCommand,
-  DeregisterTargetsCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
+import { CdkCustomResourceEvent, CdkCustomResourceResponse } from 'aws-lambda';
 
 const autoScalingClient = new AutoScalingClient({});
-const elbClient = new ElasticLoadBalancingV2Client({});
-
-interface CloudFormationCustomResourceEvent {
-  RequestType: 'Create' | 'Update' | 'Delete';
-  ResourceProperties: {
-    AutoScalingGroupName: string;
-    TargetGroupArn: string;
-  };
-  PhysicalResourceId?: string;
-  StackId: string;
-  RequestId: string;
-  LogicalResourceId: string;
-}
-
-interface CloudFormationCustomResourceResponse {
-  Status: 'SUCCESS' | 'FAILED';
-  Reason?: string;
-  PhysicalResourceId: string;
-  StackId: string;
-  RequestId: string;
-  LogicalResourceId: string;
-}
+const elbv2Client = new ElasticLoadBalancingV2Client({});
 
 export const handler = async (
-  event: CloudFormationCustomResourceEvent,
-): Promise<CloudFormationCustomResourceResponse> => {
-  console.log('Event:', JSON.stringify(event, null, 2));
+  event: CdkCustomResourceEvent,
+): Promise<CdkCustomResourceResponse> => {
+  console.log('Received event:', JSON.stringify(event, null, 2));
 
-  const { AutoScalingGroupName, TargetGroupArn } =
-    event.ResourceProperties;
+  const autoScalingGroupName = event.ResourceProperties.AutoScalingGroupName;
+  const targetGroupArn = event.ResourceProperties.TargetGroupArn;
+
+  if (!autoScalingGroupName || !targetGroupArn) {
+    return {
+      Status: 'FAILED',
+      Reason: 'Missing required properties',
+      PhysicalResourceId: event.LogicalResourceId,
+    };
+  }
 
   try {
-    if (event.RequestType === 'Create' || event.RequestType === 'Update') {
-      // Get instances from Auto Scaling Group
-      const describeCommand = new DescribeAutoScalingGroupsCommand({
-        AutoScalingGroupNames: [AutoScalingGroupName],
-      });
+    const asgResponse = await autoScalingClient.send(
+      new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [autoScalingGroupName],
+      }),
+    );
 
-      const asgResponse = await autoScalingClient.send(describeCommand);
-      const instances =
-        asgResponse.AutoScalingGroups?.[0]?.Instances?.map(
-          (instance) => instance.InstanceId!,
-        ) || [];
+    const instanceIds =
+      asgResponse.AutoScalingGroups?.[0].Instances?.map(
+        (instance) => instance.InstanceId,
+      ) || [];
 
-      console.log('Instances to register:', instances);
+    if (instanceIds.length > 0) {
+      await elbv2Client.send(
+        new RegisterTargetsCommand({
+          TargetGroupArn: targetGroupArn,
+          Targets: instanceIds.map((id) => ({ Id: id })),
+        }),
+      );
 
-      if (instances.length > 0) {
-        // Register instances with target group
-        const registerCommand = new RegisterTargetsCommand({
-          TargetGroupArn,
-          Targets: instances.map((id) => ({ Id: id })),
-        });
-
-        await elbClient.send(registerCommand);
-        console.log('Instances registered successfully');
-      }
-    } else if (event.RequestType === 'Delete') {
-      // Get instances from Auto Scaling Group
-      const describeCommand = new DescribeAutoScalingGroupsCommand({
-        AutoScalingGroupNames: [AutoScalingGroupName],
-      });
-
-      const asgResponse = await autoScalingClient.send(describeCommand);
-      const instances =
-        asgResponse.AutoScalingGroups?.[0]?.Instances?.map(
-          (instance) => instance.InstanceId!,
-        ) || [];
-
-      console.log('Instances to deregister:', instances);
-
-      if (instances.length > 0) {
-        // Deregister instances from target group
-        const deregisterCommand = new DeregisterTargetsCommand({
-          TargetGroupArn,
-          Targets: instances.map((id) => ({ Id: id })),
-        });
-
-        await elbClient.send(deregisterCommand);
-        console.log('Instances deregistered successfully');
-      }
+      console.log(
+        `Registered ${instanceIds.length} instances with target group`,
+      );
+    } else {
+      console.log('No instances found in the Auto Scaling group');
     }
 
     return {
       Status: 'SUCCESS',
-      PhysicalResourceId:
-        event.PhysicalResourceId ||
-        `${AutoScalingGroupName}-${TargetGroupArn}`,
-      StackId: event.StackId,
-      RequestId: event.RequestId,
-      LogicalResourceId: event.LogicalResourceId,
+      PhysicalResourceId: `${autoScalingGroupName}-${targetGroupArn}`,
     };
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error registering targets:', error as Error);
     return {
       Status: 'FAILED',
-      Reason: error instanceof Error ? error.message : 'Unknown error',
-      PhysicalResourceId:
-        event.PhysicalResourceId ||
-        `${AutoScalingGroupName}-${TargetGroupArn}`,
-      StackId: event.StackId,
-      RequestId: event.RequestId,
-      LogicalResourceId: event.LogicalResourceId,
+      Reason: `Error: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      PhysicalResourceId: event.LogicalResourceId,
     };
   }
 };

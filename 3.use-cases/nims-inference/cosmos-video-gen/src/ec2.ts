@@ -53,7 +53,6 @@ export class EC2Resources extends Construct {
   constructor(scope: Construct, id: string, props: EC2ResourcesProps) {
     super(scope, id);
 
-    // Create IAM Role for EC2
     const ec2Role = new Role(this, 'EC2Role', {
       assumedBy: new ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
@@ -78,7 +77,6 @@ export class EC2Resources extends Construct {
       role: ec2Role,
     });
 
-    // Create Security Group for EC2
     const ec2SecurityGroup = new SecurityGroup(this, 'EC2SecurityGroup', {
       vpc: props.vpc,
       allowAllOutbound: true,
@@ -91,7 +89,6 @@ export class EC2Resources extends Construct {
       'Allow SSH access',
     );
 
-    // Create ALB Security Group
     const albSecurityGroup = new SecurityGroup(this, 'ALBSecurityGroup', {
       vpc: props.vpc,
       allowAllOutbound: true,
@@ -104,10 +101,8 @@ export class EC2Resources extends Construct {
       'Allow HTTPS traffic',
     );
 
-    // Allow traffic from ALB to EC2
     ec2SecurityGroup.connections.allowFrom(albSecurityGroup, Port.tcp(8000));
 
-    // Create user data script
     const userData = UserData.forLinux();
     userData.addCommands(
       '#!/bin/bash',
@@ -203,7 +198,6 @@ export class EC2Resources extends Construct {
       'log_message "User-data script execution completed"',
     );
 
-    // Create Launch Template
     const launchTemplate = new CfnLaunchTemplate(this, 'LaunchTemplate', {
       launchTemplateData: {
         imageId: MachineImage.lookup({
@@ -229,7 +223,6 @@ export class EC2Resources extends Construct {
       },
     });
 
-    // Create Auto Scaling Group
     this.autoScalingGroup = new CfnAutoScalingGroup(this, 'AutoScalingGroup', {
       minSize: '1',
       maxSize: '1',
@@ -250,14 +243,12 @@ export class EC2Resources extends Construct {
       ],
     });
 
-    // Create Application Load Balancer
     this.loadBalancer = new ApplicationLoadBalancer(this, 'LoadBalancer', {
       vpc: props.vpc,
       internetFacing: true,
       securityGroup: albSecurityGroup,
     });
 
-    // Create Target Group
     this.targetGroup = new ApplicationTargetGroup(this, 'TargetGroup', {
       vpc: props.vpc,
       port: 8000,
@@ -272,7 +263,6 @@ export class EC2Resources extends Construct {
       },
     });
 
-    // Add HTTPS listener
     this.loadBalancer.addListener('HttpsListener', {
       port: 443,
       protocol: ApplicationProtocol.HTTPS,
@@ -299,7 +289,6 @@ export class EC2Resources extends Construct {
       },
     });
 
-    // Create Route53 A record
     new ARecord(this, 'NimARecord', {
       zone: props.hostedZone,
       recordName: props.nimHostName,
