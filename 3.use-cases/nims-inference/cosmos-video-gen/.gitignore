@@ -1,0 +1,27 @@
+# CDK output
+cdk.out
+cdk.context.json
+
+# Logs
+*.log
+yarn-error.log
+
+# Dependencies
+node_modules
+**/dist/**
+**/bin/**
+**/lib/**
+
+# Environment
+.env
+config.json
+
+# OS
+.DS_Store
+
+# Misc
+dependabot.yml
+
+# Python cache
+__pycache__/
+*.py[cod]

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmos Video Generation Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+
+        .options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .status.info {
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #bbdefb;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+            border: 1px solid #c8e6c9;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+
+        .video-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        video {
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Cosmos Video Generation</h1>
+        <p class="subtitle">Generate videos from text using NVIDIA Cosmos NIM</p>
+
+        <form id="generateForm">
+            <div class="form-group">
+                <label for="apiEndpoint">API Endpoint *</label>
+                <input
+                    type="url"
+                    id="apiEndpoint"
+                    placeholder="https://cosmos-api.example.com"
+                    required
+                >
+                <div class="help-text">Enter your API endpoint URL</div>
+            </div>
+
+            <div class="form-group">
+                <label for="prompt">Prompt *</label>
+                <textarea
+                    id="prompt"
+                    placeholder="Describe the video you want to generate, e.g., 'A sunset over mountains with birds flying'"
+                    required
+                ></textarea>
+                <div class="help-text">Describe the video you want to generate</div>
+            </div>
+
+            <div class="options">
+                <div class="form-group">
+                    <label for="numFrames">Number of Frames</label>
+                    <input
+                        type="number"
+                        id="numFrames"
+                        placeholder="48"
+                        min="1"
+                        max="121"
+                    >
+                    <div class="help-text">Default: 48</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="guidanceScale">Guidance Scale</label>
+                    <input
+                        type="number"
+                        id="guidanceScale"
+                        placeholder="7.5"
+                        min="1.0"
+                        max="20.0"
+                        step="0.1"
+                    >
+                    <div class="help-text">Default: 7.5</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="seed">Seed (optional)</label>
+                    <input
+                        type="number"
+                        id="seed"
+                        placeholder="Random"
+                    >
+                    <div class="help-text">For reproducibility</div>
+                </div>
+            </div>
+
+            <button type="submit" id="submitBtn">Generate Video</button>
+        </form>
+
+        <div id="status" class="status"></div>
+
+        <div id="videoContainer" class="video-container">
+            <video id="videoPlayer" controls></video>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('generateForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const statusDiv = document.getElementById('status');
+        const videoContainer = document.getElementById('videoContainer');
+        const videoPlayer = document.getElementById('videoPlayer');
+
+        function showStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+        }
+
+        function showStatusWithSpinner(message) {
+            statusDiv.innerHTML = `<div class="spinner"></div>${message}`;
+            statusDiv.className = 'status info';
+            statusDiv.style.display = 'block';
+        }
+
+        async function pollJobStatus(apiEndpoint, jobId) {
+            const maxAttempts = 120; // 10 minutes with 5 second intervals
+            let attempts = 0;
+
+            while (attempts < maxAttempts) {
+                try {
+                    const response = await fetch(`${apiEndpoint}/api/v1/jobs/${jobId}`);
+                    const data = await response.json();
+
+                    if (data.status === 'completed') {
+                        return data;
+                    }
+
+                    if (data.status === 'failed') {
+                        throw new Error(data.error || 'Video generation failed');
+                    }
+
+                    showStatusWithSpinner(`Generating video... (${data.status})`);
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    attempts++;
+
+                } catch (error) {
+                    throw new Error(`Failed to check job status: ${error.message}`);
+                }
+            }
+
+            throw new Error('Video generation timed out');
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const apiEndpoint = document.getElementById('apiEndpoint').value.trim().replace(/\/$/, '');
+            const prompt = document.getElementById('prompt').value.trim();
+            const numFrames = document.getElementById('numFrames').value;
+            const guidanceScale = document.getElementById('guidanceScale').value;
+            const seed = document.getElementById('seed').value;
+
+            // Hide previous results
+            videoContainer.style.display = 'none';
+            videoPlayer.src = '';
+
+            // Disable form
+            submitBtn.disabled = true;
+            showStatusWithSpinner('Submitting job...');
+
+            try {
+                // Submit job
+                const payload = { prompt };
+                if (numFrames) payload.num_frames = parseInt(numFrames);
+                if (guidanceScale) payload.guidance_scale = parseFloat(guidanceScale);
+                if (seed) payload.seed = parseInt(seed);
+
+                const submitResponse = await fetch(`${apiEndpoint}/api/v1/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!submitResponse.ok) {
+                    throw new Error(`Failed to submit job: ${submitResponse.statusText}`);
+                }
+
+                const submitData = await submitResponse.json();
+                const jobId = submitData.job_id;
+
+                showStatusWithSpinner(`Job submitted (${jobId}). Generating video...`);
+
+                // Poll for completion
+                const result = await pollJobStatus(apiEndpoint, jobId);
+
+                // Display video
+                if (result.video_url) {
+                    videoPlayer.src = result.video_url;
+                    videoContainer.style.display = 'block';
+                    showStatus('✓ Video generated successfully!', 'success');
+                } else {
+                    throw new Error('No video URL in response');
+                }
+
+            } catch (error) {
+                showStatus(`✗ Error: ${error.message}`, 'error');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

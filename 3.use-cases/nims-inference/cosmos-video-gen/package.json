@@ -1,0 +1,32 @@
+{
+  "name": "cosmos-video-gen",
+  "version": "0.1.0",
+  "description": "Cosmos NIM Text-to-Video Generation on AWS",
+  "license": "MIT-0",
+  "author": "AWS HPC Team",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "deploy": "cdk deploy --require-approval never",
+    "synth": "cdk synth",
+    "upload-secrets": "ts-node scripts/uploadSecrets.ts"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.118.0",
+    "constructs": "^10.0.0",
+    "dotenv": "^16.3.1",
+    "@aws-sdk/client-secrets-manager": "^3.450.0",
+    "@aws-sdk/client-auto-scaling": "^3.450.0",
+    "@aws-sdk/client-elastic-load-balancing-v2": "^3.450.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/aws-lambda": "^8.10.130",
+    "aws-cdk": "^2.118.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.0"
+  }
+}
