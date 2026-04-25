@@ -19,9 +19,11 @@ Blackwell RTX PRO 6000 supports MIG with a different granularity than A100/H100:
 
 ## Prerequisites
 
-- `aws` CLI with credentials for the target account (the scripts assume `us-west-2` / cluster `osmo`; override via env vars)
+These scripts assume an EKS cluster is already up. If you don't have one, start from the [`1.infrastructure/`](../../../1.infrastructure) guide to provision a VPC + EKS cluster. You'll then need:
+
+- `aws` CLI with credentials for the target account (defaults to `us-west-2`; override via `AWS_REGION` / `CLUSTER_NAME`)
 - `kubectl`, `helm`, `jq`, and `python3` on `PATH`
-- An existing EKS cluster with at least one GPU managed nodegroup whose IAM role we can reuse (the scripts auto-detect one named `*gpu*`)
+- An existing EKS cluster with at least one GPU managed nodegroup whose IAM role we can reuse (the scripts auto-detect one named `*gpu*`). For a permanent setup you should provision a dedicated node role instead — see the note at the bottom.
 - G-instance vCPU quota in the target region (g7e is covered by the "Running On-Demand G and VT instances" quota)
 - Private subnets in an AZ where g7e actually has capacity (see the [Capacity](#capacity-insufficientinstancecapacity) section below — in us-west-2 we only found g7e.2xlarge capacity in 2d during testing)
 
